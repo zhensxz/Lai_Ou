@@ -6,6 +6,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.Backend.util.AuthContext;
+import com.example.Backend.entity.User;
+import com.example.Backend.entity.UserCustomerRelation;
+import com.example.Backend.repository.UserCustomerRelationRepository;
+import com.example.Backend.repository.UserRepository;
+
 import java.util.List;
 import java.util.Optional;
 
@@ -21,6 +27,12 @@ public class CustomerService {
 
     @Autowired
     private UserCustomerRelationService userCustomerRelationService;
+
+    @Autowired
+    private UserCustomerRelationRepository userCustomerRelationRepository;
+
+    @Autowired
+    private UserRepository userRepository;
     
     /**
      * 创建客户
@@ -37,7 +49,21 @@ public class CustomerService {
         customer.setProvince(province);
         
         // 保存客户
-        return customerRepository.save(customer);
+        Customer saved = customerRepository.save(customer);
+
+        // 如果当前是 EMPLOYEE 或 AUDITOR/BOSS，也可选择自动关联。按规则：EMPLOYEE 创建后自动关联到自己
+        String role = AuthContext.getRole();
+        Long uid = AuthContext.getUserId();
+        if (uid != null && "EMPLOYEE".equals(role)) {
+            User user = userRepository.findById(uid).orElse(null);
+            if (user != null) {
+                UserCustomerRelation rel = new UserCustomerRelation();
+                rel.setUser(user);
+                rel.setCustomer(saved);
+                userCustomerRelationRepository.save(rel);
+            }
+        }
+        return saved;
     }
     
     /**
@@ -54,12 +80,6 @@ public class CustomerService {
         return customerRepository.findByCustomerNameContaining(customerName);
     }
     
-    /**
-     * 根据电话查找客户
-     */
-    public Optional<Customer> findByPhone(String phone) {
-        return customerRepository.findByPhone(phone);
-    }
     
     /**
      * 根据公司名称查找客户
@@ -75,29 +95,31 @@ public class CustomerService {
         return customerRepository.findByProvince(province);
     }
     
-    /**
-     * 根据公司类别查找客户
-     */
-    public List<Customer> findByCompanyClass(String companyClass) {
-        return customerRepository.findByCompanyClass(companyClass);
-    }
     
     /**
      * 更新客户信息
      */
     public Customer updateCustomer(Long id, String customerName, String phone, String address,
-                                 String company, String province, String companyClass) {
+                                 String company, String province) {
         
         Customer customer = customerRepository.findById(id)
             .orElseThrow(() -> new RuntimeException("客户不存在"));
         
+        // 权限：EMPLOYEE 仅可更新与自己关联的客户
+        String role = AuthContext.getRole();
+        Long uid = AuthContext.getUserId();
+        if ("EMPLOYEE".equals(role)) {
+            if (uid == null || !userCustomerRelationRepository.existsByUserIdAndCustomerId(uid, id)) {
+                throw new RuntimeException("无权操作该客户");
+            }
+        }
+
         // 更新客户信息
         customer.setCustomerName(customerName);
         customer.setPhone(phone);
         customer.setAddress(address);
         customer.setCompany(company);
         customer.setProvince(province);
-        customer.setCompanyClass(companyClass);
         
         return customerRepository.save(customer);
     }
@@ -124,6 +146,15 @@ public class CustomerService {
             throw new RuntimeException("客户不存在");
         }
         
+        // 权限：EMPLOYEE 仅可删除与自己关联的客户
+        String role = AuthContext.getRole();
+        Long uid = AuthContext.getUserId();
+        if ("EMPLOYEE".equals(role)) {
+            if (uid == null || !userCustomerRelationRepository.existsByUserIdAndCustomerId(uid, id)) {
+                throw new RuntimeException("无权删除该客户");
+            }
+        }
+
         // 先删除该客户的所有用户关联关系
         userCustomerRelationService.deleteCustomerUserRelations(id);
         
@@ -135,15 +166,23 @@ public class CustomerService {
      * 获取所有客户
      */
     public List<Customer> getAllCustomers() {
+        String role = AuthContext.getRole();
+        Long uid = AuthContext.getUserId();
+        if ("EMPLOYEE".equals(role) && uid != null) {
+            // 仅返回与自己关联的客户
+            return userCustomerRelationService.getUserCustomers(
+                userRepository.findById(uid).map(User::getUsername).orElse("")
+            );
+        }
         return customerRepository.findAll();
     }
     
     /**
      * 多字段综合查询
      */
-    public List<Customer> searchCustomers(String customerName, String phone, String address,
+    public List<Customer> searchCustomers(String customerName, String address,
                                         String company, String province) {
-        return customerRepository.searchCustomers(customerName, phone, address, company, province);
+        return customerRepository.searchCustomers(customerName, address, company, province);
     }
     
     /**
@@ -163,12 +202,6 @@ public class CustomerService {
         return customerRepository.existsById(id);
     }
     
-    /**
-     * 检查电话号码是否存在
-     */
-    public boolean existsByPhone(String phone) {
-        return customerRepository.findByPhone(phone).isPresent();
-    }
     
     /**
      * 获取客户总数
@@ -184,12 +217,6 @@ public class CustomerService {
         return customerRepository.findByProvince(province).size();
     }
     
-    /**
-     * 根据公司类别统计客户数量
-     */
-    public long countByCompanyClass(String companyClass) {
-        return customerRepository.findByCompanyClass(companyClass).size();
-    }
     
     /**
      * 获取所有省份列表
@@ -203,16 +230,4 @@ public class CustomerService {
             .collect(java.util.stream.Collectors.toList());
     }
     
-    /**
-     * 获取所有公司类别列表
-     */
-    public List<String> getAllCompanyClasses() {
-        return customerRepository.findAll()
-            .stream()
-            .map(Customer::getCompanyClass)
-            .filter(companyClass -> companyClass != null && !companyClass.isEmpty())
-            .distinct()
-            .sorted()
-            .collect(java.util.stream.Collectors.toList());
-    }
 }

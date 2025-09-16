@@ -10,6 +10,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import com.example.Backend.util.AuthContext;
 
 /**
  * 报单业务逻辑服务类
@@ -21,15 +22,15 @@ public class SellService {
     @Autowired
     private SellRepository sellRepository;
     
-    /**
-     * 创建报单
-     */
     public Sell createSell(String sellerName, LocalDate sellDate, String productName,
-                          Integer productQuantity, BigDecimal productPrice, BigDecimal totalPrice,
-                          String customerCompany, String customerName, String customerAddress,
-                          String customerPhone,String paymentScreenshotUrl) {
-        
-        // 创建报单对象
+                        Integer productQuantity, BigDecimal productPrice, BigDecimal totalPrice,
+                        String customerCompany, String customerName, String customerAddress,
+                        String customerPhone, String customerProvince, String sellKind, String paymentScreenshotUrl, String productSpec, String payMethod) {
+
+        if (productSpec == null || !productSpec.matches("^(支|盒)$")) {
+            throw new RuntimeException("产品规格只能为\"支\"或\"盒\"");
+        }
+
         Sell sell = new Sell();
         sell.setSellerName(sellerName);
         sell.setSellDate(sellDate);
@@ -41,11 +42,13 @@ public class SellService {
         sell.setCustomerName(customerName);
         sell.setCustomerAddress(customerAddress);
         sell.setCustomerPhone(customerPhone);
+        sell.setCustomerProvince(customerProvince);
+        sell.setSellKind(sellKind);
         sell.setPaymentScreenshotUrl(paymentScreenshotUrl);
-        sell.setIsPaid(false);//默认未打款
-        sell.setIsValid(false); // 默认无效，需要审核
-        
-        // 保存报单
+        sell.setProductSpec(productSpec);
+        sell.setPayMethod(payMethod);  // 添加支付方式
+        sell.setIsPaid(false);
+        sell.setIsValid(false);
         return sellRepository.save(sell);
     }
     
@@ -56,23 +59,31 @@ public class SellService {
         return sellRepository.findById(id);
     }
     
-    /**
-     * 更新报单信息（只能更新未审核的报单）
-     */
     public Sell updateSell(Long id, String sellerName, LocalDate sellDate, String productName,
                         Integer productQuantity, BigDecimal productPrice, BigDecimal totalPrice,
                         String customerCompany, String customerName, String customerAddress,
-                        String customerPhone, String paymentScreenshotUrl) {
-        
+                        String customerPhone, String customerProvince, String sellKind, String paymentScreenshotUrl, String productSpec, String payMethod) {
+
         Sell sell = sellRepository.findById(id)
             .orElseThrow(() -> new RuntimeException("报单不存在"));
-        
-        // 检查报单是否已审核
+
         if (sell.getIsValid()) {
             throw new RuntimeException("已审核的报单不能修改");
         }
-        
-        // 更新报单信息
+
+        // RBAC: EMPLOYEE 只能修改自己创建的报单
+        String role = AuthContext.getRole();
+        String currentUsername = AuthContext.getUsername();
+        if ("EMPLOYEE".equals(role)) {
+            if (currentUsername == null || !currentUsername.equals(sell.getSellerName())) {
+                throw new RuntimeException("无权修改该报单");
+            }
+        }
+
+        if (productSpec == null || !productSpec.matches("^(支|盒)$")) {
+            throw new RuntimeException("产品规格只能为\"支\"或\"盒\"");
+        }
+
         sell.setSellerName(sellerName);
         sell.setSellDate(sellDate);
         sell.setProductName(productName);
@@ -83,8 +94,11 @@ public class SellService {
         sell.setCustomerName(customerName);
         sell.setCustomerAddress(customerAddress);
         sell.setCustomerPhone(customerPhone);
+        sell.setCustomerProvince(customerProvince);
+        sell.setSellKind(sellKind);
         sell.setPaymentScreenshotUrl(paymentScreenshotUrl);
-        
+        sell.setProductSpec(productSpec);
+        sell.setPayMethod(payMethod);  // 添加支付方式
         return sellRepository.save(sell);
     }
     
@@ -114,6 +128,10 @@ public class SellService {
      * 审核报单（设置为有效）
      */
     public Sell approveSell(Long id) {
+        String role = AuthContext.getRole();
+        if ("EMPLOYEE".equals(role)) {
+            throw new RuntimeException("无权审核报单");
+        }
         return updateValidityStatus(id, true);
     }
     
@@ -121,6 +139,10 @@ public class SellService {
      * 拒绝报单（设置为无效）
      */
     public Sell rejectSell(Long id) {
+        String role = AuthContext.getRole();
+        if ("EMPLOYEE".equals(role)) {
+            throw new RuntimeException("无权审核报单");
+        }
         return updateValidityStatus(id, false);
     }
     
@@ -128,6 +150,10 @@ public class SellService {
      * 标记为已打款
      */
     public Sell markAsPaid(Long id) {
+        String role = AuthContext.getRole();
+        if (!"BOSS".equals(role)) {
+            throw new RuntimeException("无权标记打款");
+        }
         return updatePaymentStatus(id, true);
     }
     
@@ -135,6 +161,10 @@ public class SellService {
      * 标记为未打款
      */
     public Sell markAsUnpaid(Long id) {
+        String role = AuthContext.getRole();
+        if (!"BOSS".equals(role)) {
+            throw new RuntimeException("无权标记打款");
+        }
         return updatePaymentStatus(id, false);
     }
     
@@ -145,6 +175,17 @@ public class SellService {
         if (!sellRepository.existsById(id)) {
             throw new RuntimeException("报单不存在");
         }
+        Sell sell = sellRepository.findById(id).orElseThrow();
+        if (sell.getIsValid()) {
+            throw new RuntimeException("已审核的报单不能删除");
+        }
+        String role = AuthContext.getRole();
+        String currentUsername = AuthContext.getUsername();
+        if ("EMPLOYEE".equals(role)) {
+            if (currentUsername == null || !currentUsername.equals(sell.getSellerName())) {
+                throw new RuntimeException("无权删除该报单");
+            }
+        }
         sellRepository.deleteById(id);
     }
     
@@ -152,6 +193,11 @@ public class SellService {
      * 获取所有报单
      */
     public List<Sell> getAllSells() {
+        String role = AuthContext.getRole();
+        String currentUsername = AuthContext.getUsername();
+        if ("EMPLOYEE".equals(role) && currentUsername != null) {
+            return sellRepository.findBySellerNameContaining(currentUsername);
+        }
         return sellRepository.findAll();
     }
     
@@ -240,15 +286,29 @@ public class SellService {
     }
     
     /**
+     * 根据报单类型模糊查询
+     */
+    public List<Sell> findBySellKindContaining(String sellKind) {
+        return sellRepository.findBySellKindContaining(sellKind);
+    }
+    
+    /**
+     * 根据支付方式模糊查询
+     */
+    public List<Sell> findByPayMethodContaining(String payMethod) {
+        return sellRepository.findByPayMethodContaining(payMethod);
+    }
+    
+    /**
      * 多字段综合查询
      */
-    public List<Sell> searchSells(String sellerName, String productName, String customerName,
-                                 String customerCompany, String customerProvince,
-                                 LocalDate startDate, LocalDate endDate,
-                                 Double minTotalPrice, Double maxTotalPrice,
+    public List<Sell> searchSells(String sellerName, String productName, String productSpec,
+                                 String customerName, String customerCompany, String customerProvince,
+                                 String sellKind, String payMethod, LocalDate startDate, LocalDate endDate,
+                                 BigDecimal minTotalPrice, BigDecimal maxTotalPrice,
                                  Boolean isPaid, Boolean isValid) {
-        return sellRepository.searchSells(sellerName, productName, customerName,
-                                        customerCompany, customerProvince,
+        return sellRepository.searchSells(sellerName, productName, productSpec,
+                                        customerName, customerCompany, customerProvince, sellKind, payMethod,
                                         startDate, endDate, minTotalPrice, maxTotalPrice,
                                         isPaid, isValid);
     }

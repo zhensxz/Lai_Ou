@@ -34,6 +34,13 @@ public class Sell {
     private Long id;
     
     /**
+     * 报单类型
+     */
+    @NotBlank(message = "报单类型不能为空")
+    @Column(name = "sell_kind", nullable = false, length = 50)
+    private String sellKind;
+    
+    /**
      * 报单人名称
      */
     @NotBlank(message = "报单人名称不能为空")
@@ -61,6 +68,14 @@ public class Sell {
     @DecimalMin(value = "1", message = "产品数量必须大于0")
     @Column(name = "product_quantity", nullable = false)
     private Integer productQuantity;
+
+    /**
+     * 产品规格（仅“支”或“盒”）
+     */
+    @NotBlank(message = "产品规格不能为空")
+    @Pattern(regexp = "^(支|盒)$", message = "产品规格只能为“支”或“盒”")
+    @Column(name = "product_spec", nullable = false, length = 10)
+    private String productSpec;
     
     /**
      * 产品报价
@@ -105,6 +120,19 @@ public class Sell {
     @Pattern(regexp = "^1[3-9]\\d{9}$", message = "手机号格式不正确")
     @Column(name = "customer_phone", nullable = false, length = 20)
     private String customerPhone;
+    
+    /**
+     * 客户省份
+     */
+    @NotBlank(message = "客户省份不能为空")
+    @Column(name = "customer_province", nullable = false, length = 50)
+    private String customerProvince;
+    
+    /**
+     * 支付方式
+     */
+    @Column(name = "pay_method", length = 100)
+    private String payMethod;
     
     /**
      * 是否已打款

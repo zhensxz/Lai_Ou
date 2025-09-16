@@ -56,6 +56,16 @@ public interface SellRepository extends JpaRepository<Sell, Long> {
     List<Sell> findByCustomerProvince(String customerProvince);
     
     /**
+     * 根据报单类型模糊查询
+     */
+    List<Sell> findBySellKindContaining(String sellKind);
+    
+    /**
+     * 根据支付方式模糊查询
+     */
+    List<Sell> findByPayMethodContaining(String payMethod);
+    
+    /**
      * 查询已打款的报单
      */
     List<Sell> findByIsPaidTrue();
@@ -104,30 +114,33 @@ public interface SellRepository extends JpaRepository<Sell, Long> {
     @Query("SELECT s FROM Sell s WHERE s.totalPrice BETWEEN :minPrice AND :maxPrice")
     List<Sell> findByTotalPriceBetween(@Param("minPrice") Double minPrice, @Param("maxPrice") Double maxPrice);
     
-    /**
-     * 多字段综合查询（可选条件：模糊/范围/布尔）
-     */
     @Query("SELECT s FROM Sell s WHERE " +
-           "(:sellerName IS NULL OR s.sellerName LIKE %:sellerName%) AND " +
-           "(:productName IS NULL OR s.productName LIKE %:productName%) AND " +
-           "(:customerCompany IS NULL OR s.customerCompany LIKE %:customerCompany%) AND " +
-           "(:customerName IS NULL OR s.customerName LIKE %:customerName%) AND " +
-           "(:customerPhone IS NULL OR s.customerPhone LIKE %:customerPhone%) AND " +
-           "(:startDate IS NULL OR s.sellDate >= :startDate) AND " +
-           "(:endDate IS NULL OR s.sellDate <= :endDate) AND " +
-           "(:minTotalPrice IS NULL OR s.totalPrice >= :minTotalPrice) AND " +
-           "(:maxTotalPrice IS NULL OR s.totalPrice <= :maxTotalPrice) AND " +
-           "(:isPaid IS NULL OR s.isPaid = :isPaid) AND " +
-           "(:isValid IS NULL OR s.isValid = :isValid)")
+        "(:sellerName IS NULL OR s.sellerName LIKE %:sellerName%) AND " +
+        "(:productName IS NULL OR s.productName LIKE %:productName%) AND " +
+        "(:productSpec IS NULL OR s.productSpec = :productSpec) AND " +   // 新增
+        "(:customerCompany IS NULL OR s.customerCompany LIKE %:customerCompany%) AND " +
+        "(:customerName IS NULL OR s.customerName LIKE %:customerName%) AND " +
+        "(:customerPhone IS NULL OR s.customerPhone LIKE %:customerPhone%) AND " +
+        "(:sellKind IS NULL OR s.sellKind LIKE %:sellKind%) AND " +   // 新增
+        "(:payMethod IS NULL OR s.payMethod LIKE %:payMethod%) AND " +   // 新增
+        "(:startDate IS NULL OR s.sellDate >= :startDate) AND " +
+        "(:endDate IS NULL OR s.sellDate <= :endDate) AND " +
+        "(:minTotalPrice IS NULL OR s.totalPrice >= :minTotalPrice) AND " +
+        "(:maxTotalPrice IS NULL OR s.totalPrice <= :maxTotalPrice) AND " +
+        "(:isPaid IS NULL OR s.isPaid = :isPaid) AND " +
+        "(:isValid IS NULL OR s.isValid = :isValid)")
     List<Sell> searchSells(@Param("sellerName") String sellerName,
-                           @Param("productName") String productName,
-                           @Param("customerCompany") String customerCompany,
-                           @Param("customerName") String customerName,
-                           @Param("customerPhone") String customerPhone,
-                           @Param("startDate") java.time.LocalDate startDate,
-                           @Param("endDate") java.time.LocalDate endDate,
-                           @Param("minTotalPrice") java.math.BigDecimal minTotalPrice,
-                           @Param("maxTotalPrice") java.math.BigDecimal maxTotalPrice,
-                           @Param("isPaid") Boolean isPaid,
-                           @Param("isValid") Boolean isValid);
+                        @Param("productName") String productName,
+                        @Param("productSpec") String productSpec,          // 新增
+                        @Param("customerCompany") String customerCompany,
+                        @Param("customerName") String customerName,
+                        @Param("customerPhone") String customerPhone,
+                        @Param("sellKind") String sellKind,                // 新增
+                        @Param("payMethod") String payMethod,              // 新增
+                        @Param("startDate") java.time.LocalDate startDate,
+                        @Param("endDate") java.time.LocalDate endDate,
+                        @Param("minTotalPrice") java.math.BigDecimal minTotalPrice,
+                        @Param("maxTotalPrice") java.math.BigDecimal maxTotalPrice,
+                        @Param("isPaid") Boolean isPaid,
+                        @Param("isValid") Boolean isValid);
 }

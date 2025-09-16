@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 客户数据访问接口
@@ -39,12 +40,10 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
      */
     @Query("SELECT c FROM Customer c WHERE " +
            "(:customerName IS NULL OR c.customerName LIKE %:customerName%) AND " +
-           "(:phone IS NULL OR c.phone LIKE %:phone%) AND " +
            "(:address IS NULL OR c.address LIKE %:address%) AND " +
            "(:company IS NULL OR c.company LIKE %:company%) AND " +
            "(:province IS NULL OR c.province LIKE %:province%)")
     List<Customer> searchCustomers(@Param("customerName") String customerName,
-                                  @Param("phone") String phone,
                                   @Param("address") String address,
                                   @Param("company") String company,
                                   @Param("province") String province);

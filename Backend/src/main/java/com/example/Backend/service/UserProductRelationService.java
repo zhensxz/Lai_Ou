@@ -13,6 +13,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Optional;
 
+import com.example.Backend.util.AuthContext;
+
 /**
  * 用户产品关联业务逻辑服务类
  */
@@ -33,6 +35,11 @@ public class UserProductRelationService {
      * 为用户分配产品管理权限
      */
     public UserProductRelation assignProductToUser(String username, Long productId) {
+        // RBAC: EMPLOYEE 禁止；AUDITOR/BOSS 允许
+        String role = AuthContext.getRole();
+        if ("EMPLOYEE".equals(role)) {
+            throw new RuntimeException("无权分配产品");
+        }
         // 通过用户名查找用户
         User user = userRepository.findByUsername(username)
             .orElseThrow(() -> new RuntimeException("用户不存在: " + username));
@@ -58,6 +65,10 @@ public class UserProductRelationService {
      * 取消用户的产品管理权限
      */
     public void unassignProductFromUser(String username, Long productId) {
+        String role = AuthContext.getRole();
+        if ("EMPLOYEE".equals(role)) {
+            throw new RuntimeException("无权取消产品权限");
+        }
         // 通过用户名查找用户
         User user = userRepository.findByUsername(username)
             .orElseThrow(() -> new RuntimeException("用户不存在: " + username));
@@ -76,10 +87,16 @@ public class UserProductRelationService {
         User user = userRepository.findByUsername(username)
             .orElseThrow(() -> new RuntimeException("用户不存在: " + username));
         
-        return userProductRelationRepository.findByUserId(user.getId())
-            .stream()
-            .map(UserProductRelation::getProduct)
-            .collect(java.util.stream.Collectors.toList());
+        List<UserProductRelation> relations = userProductRelationRepository.findByUserId(user.getId());
+        List<Product> products = new java.util.ArrayList<>();
+        
+        for (UserProductRelation relation : relations) {
+            Product product = relation.getProduct();
+            // 强制加载产品数据，避免懒加载代理对象
+            products.add(product);
+        }
+        
+        return products;
     }
     
     /**

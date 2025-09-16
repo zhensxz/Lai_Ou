@@ -11,6 +11,8 @@ import java.time.YearMonth;
 import java.util.List;
 import java.util.Optional;
 
+import com.example.Backend.util.AuthContext;
+
 /**
  * 产品业务逻辑服务类
  */
@@ -27,10 +29,15 @@ public class ProductService {
     /**
      * 创建产品
      */
-    public Product createProduct(String name, String description, BigDecimal basePrice, Integer stockQuantity, YearMonth expiryDate, String manufacturer) {
+    public Product createProduct(String name, String description, BigDecimal basePrice, Integer stockQuantity, String expiryDate, String manufacturer, String spec) {
+        // RBAC: EMPLOYEE 禁止创建
+        String role = AuthContext.getRole();
+        if ("EMPLOYEE".equals(role)) {
+            throw new RuntimeException("无权创建产品");
+        }
         // 当效期不为空时，检查产品名称和效期的组合是否已存在
-        if (expiryDate != null) {
-            List<Product> existingProducts = productRepository.findByName(name);
+        if (expiryDate != null && !expiryDate.trim().isEmpty()) {
+            List<Product> existingProducts = productRepository.findByNameContaining(name);
             for (Product existingProduct : existingProducts) {
                 if (existingProduct.getName().equals(name) && 
                     existingProduct.getExpiryDate() != null && 
@@ -48,6 +55,7 @@ public class ProductService {
         product.setStockQuantity(stockQuantity);
         product.setExpiryDate(expiryDate);
         product.setManufacturer(manufacturer);
+        product.setSpec(spec);
         
         // 保存产品
         return productRepository.save(product);
@@ -89,9 +97,51 @@ public class ProductService {
     }
     
     /**
+     * 更新产品信息
+     */
+    public Product updateProduct(Long id, Product product) {
+        // RBAC: EMPLOYEE 禁止更新
+        String role = AuthContext.getRole();
+        if ("EMPLOYEE".equals(role)) {
+            throw new RuntimeException("无权更新产品");
+        }
+        Product existingProduct = productRepository.findById(id)
+            .orElseThrow(() -> new RuntimeException("产品不存在"));
+        
+        // 当效期不为空时，检查产品名称和效期的组合是否已存在（排除当前产品）
+        if (product.getExpiryDate() != null && !product.getExpiryDate().trim().isEmpty()) {
+            List<Product> existingProducts = productRepository.findByNameContaining(product.getName());
+            for (Product existing : existingProducts) {
+                if (!existing.getId().equals(id) && 
+                    existing.getName().equals(product.getName()) && 
+                    existing.getExpiryDate() != null && 
+                    existing.getExpiryDate().equals(product.getExpiryDate())) {
+                    throw new RuntimeException("该产品已登记");
+                }
+            }
+        }
+        
+        // 更新产品信息
+        existingProduct.setName(product.getName());
+        existingProduct.setDescription(product.getDescription());
+        existingProduct.setBasePrice(product.getBasePrice());
+        existingProduct.setStockQuantity(product.getStockQuantity());
+        existingProduct.setExpiryDate(product.getExpiryDate());
+        existingProduct.setManufacturer(product.getManufacturer());
+        existingProduct.setSpec(product.getSpec());
+        
+        return productRepository.save(existingProduct);
+    }
+    
+    /**
      * 更新产品库存
      */
     public Product updateStock(Long id, Integer newStockQuantity) {
+        // RBAC: EMPLOYEE 禁止更新库存
+        String role = AuthContext.getRole();
+        if ("EMPLOYEE".equals(role)) {
+            throw new RuntimeException("无权更新库存");
+        }
         Product product = productRepository.findById(id)
             .orElseThrow(() -> new RuntimeException("产品不存在"));
         
@@ -107,6 +157,11 @@ public class ProductService {
      * 删除产品
      */
     public void deleteProduct(Long id) {
+        // RBAC: EMPLOYEE 禁止删除
+        String role = AuthContext.getRole();
+        if ("EMPLOYEE".equals(role)) {
+            throw new RuntimeException("无权删除产品");
+        }
         if (!productRepository.existsById(id)) {
             throw new RuntimeException("产品不存在");
         }
@@ -116,34 +171,22 @@ public class ProductService {
         
         // 再删除产品本身
         productRepository.deleteById(id);
+    }
     
     /**
      * 获取所有产品
      */
     public List<Product> getAllProducts() {
+        String role = AuthContext.getRole();
+        if ("EMPLOYEE".equals(role)) {
+            String username = com.example.Backend.util.AuthContext.getUsername();
+            if (username != null && !username.isEmpty()) {
+                return userProductRelationService.getUserProducts(username);
+            }
+        }
         return productRepository.findAll();
     }
     
-    /**
-     * 查询即将过期的产品
-     */
-    public List<Product> getExpiringProducts() {
-        return productRepository.findExpiringProducts(YearMonth.now());
-    }
-    
-    /**
-     * 查询已过期的产品
-     */
-    public List<Product> getExpiredProducts() {
-        return productRepository.findExpiredProducts(YearMonth.now());
-    }
-    
-    /**
-     * 查询没有设置过期日期的产品
-     */
-    public List<Product> getProductsWithoutExpiry() {
-        return productRepository.findProductsWithoutExpiry();
-    }
     
     /**
      * 检查产品是否存在

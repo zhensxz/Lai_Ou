@@ -25,15 +25,4 @@ public interface UserRepository extends JpaRepository<User, Long> {
      */
     boolean existsByUsername(String username);
     
-    /**
-     * 查询用户管理的所有产品
-     */
-    @Query("SELECT u.products FROM User u WHERE u.id = :userId")
-    List<Product> findProductsByUserId(@Param("userId") Long userId);
-    
-    /**
-     * 查询用户管理的所有客户
-     */
-    @Query("SELECT u.customers FROM User u WHERE u.id = :userId")
-    List<Customer> findCustomersByUserId(@Param("userId") Long userId);
 }

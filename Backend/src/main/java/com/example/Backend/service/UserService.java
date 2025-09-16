@@ -6,8 +6,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.Optional;
+import java.util.List;
 
 /**
  * 用户业务逻辑服务类
@@ -32,6 +32,8 @@ public class UserService {
         User user = new User();
         user.setUsername(username);
         user.setPassword(password); // 实际项目中应该加密密码
+        // 注册只允许创建 EMPLOYEE 角色
+        user.setRole(com.example.Backend.entity.UserRole.EMPLOYEE);
         
         // 保存用户
         return userRepository.save(user);
@@ -105,23 +107,4 @@ public class UserService {
         return userRepository.existsByUsername(username);
     }
     
-    /**
-     * 获取用户管理的产品
-     */
-    public List<Product> getUserProducts(Long userId) {
-        if (!userRepository.existsById(userId)) {
-            throw new RuntimeException("用户不存在");
-        }
-        return userRepository.findProductsByUserId(userId);
-    }
-    
-    /**
-     * 获取用户管理的客户
-     */
-    public List<Customer> getUserCustomers(Long userId) {
-        if (!userRepository.existsById(userId)) {
-            throw new RuntimeException("用户不存在");
-        }
-        return userRepository.findCustomersByUserId(userId);
-    }
 }
